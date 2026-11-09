@@ -8,6 +8,10 @@ on:
     branches:
       - 5.2.5-est
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     defaults:
@@ -16,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        java: [ '8' ]
+        java: [ '8', '11', '17' ]
         architecture: [ 'x64' ]
         distribution: [ 'adopt' ]
     steps:
