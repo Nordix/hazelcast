@@ -43,4 +43,5 @@ jobs:
 
       - name: Test hazelcast
         run : |
+          cd hazelcast
           mvn test -P all-tests
