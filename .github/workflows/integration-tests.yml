@@ -1,0 +1,44 @@
+name: aws-tests
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 5.2.5-est
+  pull_request:
+    branches:
+      - 5.2.5-est
+
+jobs:
+  build:
+    defaults:
+      run:
+        shell: bash
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        java: [ '8' ]
+        architecture: [ 'x64' ]
+        distribution: [ 'adopt' ]
+    steps:
+      # SET UP JDK
+      - name: Setup JDK
+        uses: actions/setup-java@v2
+        with:
+          java-version: ${{ matrix.java }}
+          architecture: ${{ matrix.architecture }}
+          distribution: ${{ matrix.distribution }}
+
+      - run: java -version
+
+      # BUILD HAZELCAST AWS SNAPSHOT
+      - uses: actions/checkout@v3.0.2
+        with:
+          path: hazelcast
+
+      - name: Build hazelcast jar
+        run: |
+          mvn clean install -DskipTests -Dcheckstyle.skip
+          echo "Hazelcast jar is: " hazelcast/target/hazelcast-*-SNAPSHOT.jar
+
+      - name: Test hazelcast
+        run : mvn test -P all-tests
