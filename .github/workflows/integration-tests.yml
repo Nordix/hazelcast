@@ -1,4 +1,4 @@
-name: aws-tests
+name: integration-tests
 on:
   workflow_dispatch:
   push:
@@ -30,15 +30,17 @@ jobs:
 
       - run: java -version
 
-      # BUILD HAZELCAST AWS SNAPSHOT
+      # BUILD HAZELCAST SNAPSHOT
       - uses: actions/checkout@v3.0.2
         with:
           path: hazelcast
 
       - name: Build hazelcast jar
         run: |
+          cd hazelcast
           mvn clean install -DskipTests -Dcheckstyle.skip
           echo "Hazelcast jar is: " hazelcast/target/hazelcast-*-SNAPSHOT.jar
 
       - name: Test hazelcast
-        run : mvn test -P all-tests
+        run : |
+          mvn test -P all-tests
