@@ -45,7 +45,12 @@ jobs:
           mvn clean install -DskipTests -Dcheckstyle.skip
           echo "Hazelcast jar is: " hazelcast/target/hazelcast-*-SNAPSHOT.jar
 
+      - name: Validate hazelcast
+        run : |
+          cd hazelcast
+          mvn clean validate
+
       - name: Test hazelcast
         run : |
           cd hazelcast
-          mvn test -P test
+          mvn test -P pr-builder
