@@ -7,9 +7,6 @@ on:
   pull_request:
     branches:
       - v5.2.5-est
-    paths:
-      - 'hazelcast/src/main/java/com/hazelcast/aws/**'
-      - '.github/terraform/aws/**'
 
 jobs:
   build:
