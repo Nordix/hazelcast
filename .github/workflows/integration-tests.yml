@@ -22,7 +22,7 @@ jobs:
       matrix:
         java: [ '8', '11', '17' ]
         architecture: [ 'x64' ]
-        distribution: [ 'adopt' ]
+        distribution: [ 'corretto' ]
     steps:
       # SET UP JDK
       - name: Setup JDK
@@ -55,7 +55,7 @@ jobs:
       matrix:
         java: [ '8', '11', '17' ]
         architecture: [ 'x64' ]
-        distribution: [ 'adopt' ]
+        distribution: [ 'corretto' ]
     steps:
       # SET UP JDK
       - name: Setup JDK
@@ -87,7 +87,7 @@ jobs:
       matrix:
         java: [ '8', '11', '17' ]
         architecture: [ 'x64' ]
-        distribution: [ 'adopt' ]
+        distribution: [ 'corretto' ]
     steps:
       # SET UP JDK
       - name: Setup JDK
