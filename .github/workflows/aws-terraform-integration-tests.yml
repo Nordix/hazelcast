@@ -3,7 +3,10 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - master
+      - v5.2.5-est
+  pull_request:
+    branches:
+      - v5.2.5-est
     paths:
       - 'hazelcast/src/main/java/com/hazelcast/aws/**'
       - '.github/terraform/aws/**'
@@ -17,16 +20,20 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_ACCESS_KEY_ID:  ${{ secrets.AWS_ACCESS_KEY_ID }}
     runs-on: ubuntu-latest
-    if: github.repository_owner == 'hazelcast'
+    if: github.repository_owner == 'Nordix'
     strategy:
       matrix:
         java: [ '8' ]
         architecture: [ 'x64' ]
-        distribution: [ 'adopt' ]
+        distribution: [ 'corretto' ]
     steps:
-      # SET UP JDK
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 #7.0.1
+        with:
+          path: hazelcast
+
+        # SET UP JDK
       - name: Setup JDK
-        uses: actions/setup-java@v2
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 #6.2.0
         with:
           java-version: ${{ matrix.java }}
           architecture: ${{ matrix.architecture }}
@@ -35,16 +42,12 @@ jobs:
       - run: java -version
 
       # BUILD HAZELCAST AWS SNAPSHOT
-      - uses: actions/checkout@v3.0.2
-        with:
-          path: hazelcast
-
       - name: Build hazelcast jar
         run: |
           cd hazelcast
           mvn clean install -DskipTests -Dcheckstyle.skip
-          echo "Hazelcast jar is: " hazelcast/target/hazelcast-*-SNAPSHOT.jar
-          cp hazelcast/target/hazelcast-*-SNAPSHOT.jar ~/hazelcast.jar
+          find target -maxdepth 1 -name 'hazelcast-*.jar' ! -name 'hazelcast-*-*.jar' -print
+          find target -maxdepth 1 -name 'hazelcast-*.jar' ! -name 'hazelcast-*-*.jar' -exec cp {} ~/hazelcast.jar \;
 
       # INSTALL TERRAFORM
       - name : Set-up Terraform
