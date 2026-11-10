@@ -45,10 +45,62 @@ jobs:
           mvn clean install -DskipTests -Dcheckstyle.skip
           echo "Hazelcast jar is: " hazelcast/target/hazelcast-*-SNAPSHOT.jar
 
+  validate:
+    defaults:
+      run:
+        shell: bash
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        java: [ '8', '11', '17' ]
+        architecture: [ 'x64' ]
+        distribution: [ 'adopt' ]
+    steps:
+      # SET UP JDK
+      - name: Setup JDK
+        uses: actions/setup-java@v2
+        with:
+          java-version: ${{ matrix.java }}
+          architecture: ${{ matrix.architecture }}
+          distribution: ${{ matrix.distribution }}
+
+      - run: java -version
+
+      # BUILD HAZELCAST SNAPSHOT
+      - uses: actions/checkout@v3.0.2
+        with:
+          path: hazelcast
+
       - name: Validate hazelcast
         run : |
           cd hazelcast
           mvn clean validate
+
+  test:
+    defaults:
+      run:
+        shell: bash
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        java: [ '8', '11', '17' ]
+        architecture: [ 'x64' ]
+        distribution: [ 'adopt' ]
+    steps:
+      # SET UP JDK
+      - name: Setup JDK
+        uses: actions/setup-java@v2
+        with:
+          java-version: ${{ matrix.java }}
+          architecture: ${{ matrix.architecture }}
+          distribution: ${{ matrix.distribution }}
+
+      - run: java -version
+
+      # BUILD HAZELCAST SNAPSHOT
+      - uses: actions/checkout@v3.0.2
+        with:
+          path: hazelcast
 
       - name: Test hazelcast
         run : |
