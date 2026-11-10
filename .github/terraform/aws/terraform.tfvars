@@ -1,6 +1,6 @@
 member_count                = "2"
-aws_instance_type           = "t2.micro"
-aws_region                  = "eu-central-1"
+aws_instance_type           = "t3.micro"
+aws_region                  = "eu-north-1"
 aws_tag_key                 = "Category"
 aws_tag_value               = "hazelcast-aws-discovery"
 username                    = "ubuntu"

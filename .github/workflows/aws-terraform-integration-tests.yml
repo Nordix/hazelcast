@@ -28,23 +28,18 @@ jobs:
         with:
           path: hazelcast
 
-      # TEMPORARY DIAGNOSTIC: find which regions the CI key may use (remove after SCP issue resolved)
+      # TEMPORARY DIAGNOSTIC: list Canonical AMIs in the SCP-allowlisted region (remove after verification)
       - name: Probe AWS region permissions
         continue-on-error: true
         run: |
           set +o pipefail
-          aws sts get-caller-identity
-          for r in us-east-1 us-east-2 eu-west-1 eu-west-2 eu-central-1 eu-north-1 eu-south-1 ap-south-1; do
-            printf '%-14s ' "$r"
-            if out=$(aws ec2 describe-images --region "$r" --owners 099720109477 \
-              --filters 'Name=name,Values=ubuntu/images/hvm-ssd/ubuntu-bionic-18.04-amd64-server-*' \
-              --query 'sort_by(Images,&CreationDate)[-1].ImageId' --output text 2>&1); then
-              echo "ALLOWED -> $out"
-            else
-              reason=$(printf '%s' "$out" | grep -o 'api error [A-Za-z]*' | head -1 || true)
-              echo "DENIED -> ${reason:-unknown error}"
-            fi
-          done
+          echo "== Bionic filter (what main.tf searches for) =="
+          aws ec2 describe-images --region eu-north-1 --owners 099720109477 \
+            --filters 'Name=name,Values=ubuntu/images/hvm-ssd/ubuntu-bionic-18.04-amd64-server-*' \
+            --query 'reverse(sort_by(Images,&CreationDate))[:3].[Name,ImageId,CreationDate]' --output table
+          echo "== Newest Canonical images in eu-north-1 (any series) =="
+          aws ec2 describe-images --region eu-north-1 --owners 099720109477 \
+            --query 'reverse(sort_by(Images,&CreationDate))[:15].[Name,ImageId]' --output table
           exit 0
 
         # SET UP JDK
