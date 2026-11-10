@@ -3,10 +3,10 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - 5.2.5-est
+      - v5.2.5-est
   pull_request:
     branches:
-      - 5.2.5-est
+      - v5.2.5-est
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
