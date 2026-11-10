@@ -28,6 +28,23 @@ jobs:
         with:
           path: hazelcast
 
+      # TEMPORARY DIAGNOSTIC: find which regions the CI key may use (remove after SCP issue resolved)
+      - name: Probe AWS region permissions
+        continue-on-error: true
+        run: |
+          aws sts get-caller-identity
+          for r in us-east-1 us-east-2 eu-west-1 eu-west-2 eu-central-1 eu-north-1 eu-south-1 ap-south-1; do
+            printf '%-14s ' "$r"
+            out=$(aws ec2 describe-images --region "$r" --owners 099720109477 \
+              --filters 'Name=name,Values=ubuntu/images/hvm-ssd/ubuntu-bionic-18.04-amd64-server-*' \
+              --query 'sort_by(Images,&CreationDate)[-1].ImageId' --output text 2>&1)
+            if [ $? -eq 0 ]; then
+              echo "ALLOWED -> $out"
+            else
+              echo "DENIED -> $(echo "$out" | grep -o 'api error [A-Za-z]*[^,]*' | head -1)"
+            fi
+          done
+
         # SET UP JDK
       - name: Setup JDK
         uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 #6.2.0
