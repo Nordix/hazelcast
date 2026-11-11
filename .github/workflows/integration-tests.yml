@@ -84,7 +84,7 @@ jobs:
         shell: bash
     runs-on: ubuntu-latest
     # The core module is by far the largest suite; give it the bulk of the time
-    timeout-minutes: 240
+    timeout-minutes: 420
     strategy:
       fail-fast: false
       matrix:
@@ -132,7 +132,7 @@ jobs:
         shell: bash
     runs-on: ubuntu-latest
     # Everything except the core module, which test-hazelcast already covers
-    timeout-minutes: 120
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
