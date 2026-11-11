@@ -78,7 +78,39 @@ jobs:
           cd hazelcast
           mvn clean validate
 
-  test:
+  test-hazelcast:
+    defaults:
+      run:
+        shell: bash
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        java: [ '8', '11', '17' ]
+        architecture: [ 'x64' ]
+        distribution: [ 'corretto' ]
+    steps:
+      # Clone hazelcast
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 #7.0.1
+        with:
+          path: hazelcast
+
+      # SET UP JDK
+      - name: Setup JDK
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 #6.2.0
+        with:
+          java-version: ${{ matrix.java }}
+          architecture: ${{ matrix.architecture }}
+          distribution: ${{ matrix.distribution }}
+          cache: maven
+
+      - run: java -version
+
+      - name: Test hazelcast
+        run : |
+          cd hazelcast/hazelcast
+          mvn test -P pr-builder
+
+  test-all:
     defaults:
       run:
         shell: bash
