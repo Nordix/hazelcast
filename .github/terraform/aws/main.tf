@@ -149,8 +149,7 @@ resource "aws_security_group" "sg" {
 }
 
 resource "tls_private_key" "ssh" {
-  algorithm = "RSA"
-  rsa_bits  = "4096"
+  algorithm = "ED25519"
 }
 
 resource "local_file" "private_key" {
