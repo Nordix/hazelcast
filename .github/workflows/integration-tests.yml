@@ -123,10 +123,15 @@ jobs:
       # tagged suite in multiple forks (forkCount 0.5C), then the remaining tests
       # serially in the singlejvm execution. Without it surefire defaults to a
       # single fork and the core suite alone exceeds the job timeout.
+      # skipAfterFailureCount=1 aborts the run shortly after the first genuine
+      # failure instead of grinding through the whole suite; flakes rescued by
+      # rerunFailingTestsCount do not count towards it. With forked execution
+      # the exact first-failure point is approximate, but the remaining
+      # test-classes are skipped within seconds.
       - name: Test hazelcast
         run : |
           cd hazelcast/hazelcast
-          mvn test -P pr-builder,parallelTest -B --no-transfer-progress -Dsurefire.rerunFailingTestsCount=2 -DtestForkCount=1C
+          mvn test -P pr-builder,parallelTest -B --no-transfer-progress -Dsurefire.rerunFailingTestsCount=2 -Dsurefire.skipAfterFailureCount=1 -DtestForkCount=1C
 
       - name: Upload surefire reports
         if: always()
@@ -186,7 +191,7 @@ jobs:
       - name: Test hazelcast
         run : |
           cd hazelcast
-          mvn test -pl hazelcast-archunit-rules,hazelcast-build-utils,hazelcast-spring,hazelcast-spring-tests,hazelcast-sql -P pr-builder,parallelTest -B --no-transfer-progress -T1 -DtestForkCount=1C -Dapi.version=1.44 -Dsurefire.rerunFailingTestsCount=2
+          mvn test -pl hazelcast-archunit-rules,hazelcast-build-utils,hazelcast-spring,hazelcast-spring-tests,hazelcast-sql -P pr-builder,parallelTest -B --no-transfer-progress -T1 -DtestForkCount=1C -Dapi.version=1.44 -Dsurefire.rerunFailingTestsCount=2 -Dsurefire.skipAfterFailureCount=1
 
       - name: Upload surefire reports
         if: always()
