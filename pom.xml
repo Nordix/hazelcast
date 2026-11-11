@@ -713,6 +713,11 @@
         <profile>
             <!-- used by the PR builder -->
             <id>parallelTest</id>
+            <properties>
+                <!-- forks for the parallel surefire execution; override with
+                     -DtestForkCount=1C on CI runners (e.g. 4 vCPU GitHub runners) -->
+                <testForkCount>0.5C</testForkCount>
+            </properties>
             <build>
                 <plugins>
                     <plugin>
@@ -730,7 +735,7 @@
                                     <useFile>false</useFile>
                                     <trimStackTrace>false</trimStackTrace>
                                     <!-- 0.5C means half as many forks as cpu cores -->
-                                    <forkCount>0.5C</forkCount>
+                                    <forkCount>${testForkCount}</forkCount>
                                     <reuseForks>true</reuseForks>
                                     <argLine>
                                         ${vmHeapSettings}

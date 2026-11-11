@@ -115,7 +115,7 @@ jobs:
       - name: Test hazelcast
         run : |
           cd hazelcast/hazelcast
-          mvn test -P pr-builder,parallelTest -B --no-transfer-progress -Dsurefire.rerunFailingTestsCount=2
+          mvn test -P pr-builder,parallelTest -B --no-transfer-progress -Dsurefire.rerunFailingTestsCount=2 -DtestForkCount=1C
 
       - name: Upload surefire reports
         if: always()
@@ -163,10 +163,14 @@ jobs:
           cd hazelcast
           mvn install -pl hazelcast -am -DskipTests -Dcheckstyle.skip -P pr-builder -B --no-transfer-progress
 
+      # hazelcast-sql and hazelcast-spring-tests both bind members on the default
+      # 5701+ ports, so the reactor must run modules sequentially (-T1 overrides
+      # the -T0.5C in .mvn/maven.config). api.version=1.44 is needed for
+      # Testcontainers 1.17.6 against current Docker Engine (kafka SQL tests).
       - name: Test hazelcast
         run : |
           cd hazelcast
-          mvn test -pl hazelcast-archunit-rules,hazelcast-build-utils,hazelcast-spring,hazelcast-spring-tests,hazelcast-sql -P pr-builder,parallelTest -B --no-transfer-progress -Dsurefire.rerunFailingTestsCount=2
+          mvn test -pl hazelcast-archunit-rules,hazelcast-build-utils,hazelcast-spring,hazelcast-spring-tests,hazelcast-sql -P pr-builder,parallelTest -B --no-transfer-progress -T1 -DtestForkCount=1C -Dapi.version=1.44 -Dsurefire.rerunFailingTestsCount=2
 
       - name: Upload surefire reports
         if: always()
