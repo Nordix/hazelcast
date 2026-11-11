@@ -1,6 +1,7 @@
 #!/bin/bash
-# Installs the Temurin JDK given as $1 (default 8). Hazelcast 5.2 members
-# run on Java 8; Management Center (5.13 snapshot) needs Java 17+.
+# Installs the Temurin JDK given as $1 (default 8). This project is
+# strictly Java 8 — Management Center is pinned to 5.2.1, whose
+# launcher only adds Java 9+ options when it detects such a JVM.
 # Ubuntu 22.04 dropped openjdk-8 from its archives, and cloud-init
 # package installs fail silently, so install synchronously here.
 # apt reads the armored key directly — no gpg needed on the instance.

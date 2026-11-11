@@ -309,7 +309,7 @@ resource "aws_instance" "hazelcast_mancenter" {
     inline = [
       "cd /home/${var.username}",
       "chmod 0755 install_java.sh",
-      "./install_java.sh 17",
+      "./install_java.sh",
     ]
   }
 

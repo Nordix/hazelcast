@@ -58,7 +58,7 @@ jobs:
 
       - name: Terraform Apply
         working-directory: hazelcast/.github/terraform/aws
-        run: terraform apply -var="hazelcast_mancenter_version=latest-snapshot" -var="hazelcast_path=~/hazelcast.jar" -auto-approve
+        run: terraform apply -var="hazelcast_path=~/hazelcast.jar" -auto-approve
 
       - name: Terraform Destroy
         if: ${{ always() }}
