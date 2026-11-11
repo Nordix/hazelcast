@@ -126,7 +126,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 5
 
-  test-all:
+  test-quick:
     defaults:
       run:
         shell: bash
