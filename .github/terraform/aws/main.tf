@@ -338,7 +338,8 @@ resource "null_resource" "verify_mancenter" {
   provisioner "remote-exec" {
     inline = [
       "cd /home/${var.username}",
-      "tail -n 20 ./logs/mancenter.stdout.log",
+      "tail -n 20 ./logs/mancenter.stdout.log || true",
+      "tail -n 20 ./logs/mancenter.stderr.log || true",
       "chmod 0755 verify_mancenter.sh",
       "./verify_mancenter.sh  ${var.member_count}",
     ]
