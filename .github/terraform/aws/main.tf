@@ -180,7 +180,7 @@ resource "aws_instance" "hazelcast_member" {
     type        = "ssh"
     user        = var.username
     host        = self.public_ip
-    timeout     = "180s"
+    timeout     = "420s"
     agent       = false
     private_key = tls_private_key.ssh.private_key_pem
   }
@@ -229,7 +229,7 @@ resource "null_resource" "verify_members" {
     type        = "ssh"
     user        = var.username
     host        = aws_instance.hazelcast_member[count.index].public_ip
-    timeout     = "180s"
+    timeout     = "420s"
     agent       = false
     private_key = tls_private_key.ssh.private_key_pem
   }
@@ -262,7 +262,7 @@ resource "aws_instance" "hazelcast_mancenter" {
     type        = "ssh"
     user        = var.username
     host        = self.public_ip
-    timeout     = "180s"
+    timeout     = "420s"
     agent       = false
     private_key = tls_private_key.ssh.private_key_pem
   }
@@ -304,7 +304,7 @@ resource "null_resource" "verify_mancenter" {
     type        = "ssh"
     user        = var.username
     host        = aws_instance.hazelcast_mancenter.public_ip
-    timeout     = "180s"
+    timeout     = "420s"
     agent       = false
     private_key = tls_private_key.ssh.private_key_pem
   }
