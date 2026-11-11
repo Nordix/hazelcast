@@ -44,7 +44,15 @@ jobs:
         run: |
           cd hazelcast
           mvn clean install -DskipTests -Dcheckstyle.skip
-          echo "Hazelcast jar is: " hazelcast/target/hazelcast-*-SNAPSHOT.jar
+          find hazelcast/target -maxdepth 1 -name 'hazelcast-*.jar'
+
+      - name: Upload hazelcast jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: jdk${{ matrix.java }}-hazelcast-jar
+          path: hazelcast/hazelcast/target/hazelcast-*.jar
+          if-no-files-found: error
+          retention-days: 14
 
   validate:
     defaults:
