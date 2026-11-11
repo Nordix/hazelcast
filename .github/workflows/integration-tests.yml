@@ -83,7 +83,10 @@ jobs:
       run:
         shell: bash
     runs-on: ubuntu-latest
+    # The core module is by far the largest suite; give it the bulk of the time
+    timeout-minutes: 240
     strategy:
+      fail-fast: false
       matrix:
         java: [ '8', '11', '17' ]
         architecture: [ 'x64' ]
@@ -105,17 +108,33 @@ jobs:
 
       - run: java -version
 
+      # parallelTest (the pom's own PR-builder profile) runs the @ParallelJVMTest
+      # tagged suite in multiple forks (forkCount 0.5C), then the remaining tests
+      # serially in the singlejvm execution. Without it surefire defaults to a
+      # single fork and the core suite alone exceeds the job timeout.
       - name: Test hazelcast
         run : |
           cd hazelcast/hazelcast
-          mvn test -P pr-builder
+          mvn test -P pr-builder,parallelTest -B --no-transfer-progress -Dsurefire.rerunFailingTestsCount=2
+
+      - name: Upload surefire reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports-core-${{ matrix.java }}
+          path: hazelcast/hazelcast/target/surefire-reports/
+          if-no-files-found: ignore
+          retention-days: 5
 
   test-all:
     defaults:
       run:
         shell: bash
     runs-on: ubuntu-latest
+    # Everything except the core module, which test-hazelcast already covers
+    timeout-minutes: 120
     strategy:
+      fail-fast: false
       matrix:
         java: [ '8', '11', '17' ]
         architecture: [ 'x64' ]
@@ -137,7 +156,23 @@ jobs:
 
       - run: java -version
 
+      # Install the core module (and its dependencies) without tests; its tests
+      # run in test-hazelcast. This is what blew the 6h timeout before.
+      - name: Install hazelcast core without tests
+        run: |
+          cd hazelcast
+          mvn install -pl hazelcast -am -DskipTests -Dcheckstyle.skip -P pr-builder -B --no-transfer-progress
+
       - name: Test hazelcast
         run : |
           cd hazelcast
-          mvn test -P pr-builder
+          mvn test -pl hazelcast-archunit-rules,hazelcast-build-utils,hazelcast-spring,hazelcast-spring-tests,hazelcast-sql -P pr-builder,parallelTest -B --no-transfer-progress -Dsurefire.rerunFailingTestsCount=2
+
+      - name: Upload surefire reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports-modules-${{ matrix.java }}
+          path: hazelcast/*/target/surefire-reports/
+          if-no-files-found: ignore
+          retention-days: 5
