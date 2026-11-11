@@ -108,6 +108,17 @@ jobs:
 
       - run: java -version
 
+      # GitHub-hosted runners are Azure VMs: /etc/resolv.conf carries the
+      # internal.cloudapp.net search domain and IMDS (169.254.169.254) is
+      # reachable, so Hazelcast's client-side Azure discovery auto-detection
+      # engages and probes IMDS. Under test load IMDS rate-limits (HTTP 429)
+      # and client creation fails with "Failed to configure discovery
+      # strategies". Removing the search domain makes
+      # AzureDiscoveryStrategyFactory.isAutoDetectionApplicable() short-circuit
+      # to false before any probe. Nameservers are left untouched.
+      - name: Neutralize Azure IMDS discovery auto-detection
+        run: sudo sed -i '/internal\.cloudapp\.net/d' /etc/resolv.conf && cat /etc/resolv.conf
+
       # parallelTest (the pom's own PR-builder profile) runs the @ParallelJVMTest
       # tagged suite in multiple forks (forkCount 0.5C), then the remaining tests
       # serially in the singlejvm execution. Without it surefire defaults to a
@@ -155,6 +166,11 @@ jobs:
           cache: maven
 
       - run: java -version
+
+      # See test-hazelcast: keep Azure discovery auto-detection from probing IMDS
+      # (429 rate limits under load fail client creation on these runners).
+      - name: Neutralize Azure IMDS discovery auto-detection
+        run: sudo sed -i '/internal\.cloudapp\.net/d' /etc/resolv.conf && cat /etc/resolv.conf
 
       # Install the core module (and its dependencies) without tests; its tests
       # run in test-hazelcast. This is what blew the 6h timeout before.
