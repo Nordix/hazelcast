@@ -193,6 +193,19 @@ resource "aws_instance" "hazelcast_member" {
   }
 
   provisioner "file" {
+    source      = "scripts/install_java.sh"
+    destination = "/home/${var.username}/install_java.sh"
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "cd /home/${var.username}",
+      "chmod 0755 install_java.sh",
+      "./install_java.sh",
+    ]
+  }
+
+  provisioner "file" {
     source      = "scripts/start_aws_hazelcast_member.sh"
     destination = "/home/${var.username}/start_aws_hazelcast_member.sh"
   }
@@ -284,6 +297,19 @@ resource "aws_instance" "hazelcast_mancenter" {
   provisioner "remote-exec" {
     inline = [
       "while [ ! -f /var/lib/cloud/instance/boot-finished ]; do echo 'Waiting for cloud-init...'; sleep 1; done",
+    ]
+  }
+
+  provisioner "file" {
+    source      = "scripts/install_java.sh"
+    destination = "/home/${var.username}/install_java.sh"
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "cd /home/${var.username}",
+      "chmod 0755 install_java.sh",
+      "./install_java.sh",
     ]
   }
 
