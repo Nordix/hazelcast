@@ -28,20 +28,6 @@ jobs:
         with:
           path: hazelcast
 
-      # TEMPORARY DIAGNOSTIC: list Canonical AMIs in the SCP-allowlisted region (remove after verification)
-      - name: Probe AWS region permissions
-        continue-on-error: true
-        run: |
-          set +o pipefail
-          echo "== Bionic filter (what main.tf searches for) =="
-          aws ec2 describe-images --region eu-north-1 --owners 099720109477 \
-            --filters 'Name=name,Values=ubuntu/images/hvm-ssd/ubuntu-bionic-18.04-amd64-server-*' \
-            --query 'reverse(sort_by(Images,&CreationDate))[:3].[Name,ImageId,CreationDate]' --output table
-          echo "== Newest Canonical images in eu-north-1 (any series) =="
-          aws ec2 describe-images --region eu-north-1 --owners 099720109477 \
-            --query 'reverse(sort_by(Images,&CreationDate))[:15].[Name,ImageId]' --output table
-          exit 0
-
         # SET UP JDK
       - name: Setup JDK
         uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 #6.2.0
@@ -57,8 +43,8 @@ jobs:
         run: |
           cd hazelcast
           mvn clean install -DskipTests -Dcheckstyle.skip
-          find target -maxdepth 1 -name 'hazelcast-*.jar' ! -name 'hazelcast-*-*.jar' -print
-          find target -maxdepth 1 -name 'hazelcast-*.jar' ! -name 'hazelcast-*-*.jar' -exec cp {} ~/hazelcast.jar \;
+          find hazelcast/target -maxdepth 1 -name 'hazelcast-*.jar' ! -name 'hazelcast-*-*.jar' -print
+          find hazelcast/target -maxdepth 1 -name 'hazelcast-*.jar' ! -name 'hazelcast-*-*.jar' -exec cp {} ~/hazelcast.jar \;
 
       # INSTALL TERRAFORM
       - name : Set-up Terraform
