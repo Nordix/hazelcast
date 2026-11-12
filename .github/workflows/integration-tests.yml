@@ -82,7 +82,7 @@ jobs:
       - run: java -version
 
       - name: Validate hazelcast
-        run : |
+        run: |
           cd hazelcast
           mvn clean validate
 
@@ -137,7 +137,7 @@ jobs:
       # the exact first-failure point is approximate, but the remaining
       # test-classes are skipped within seconds.
       - name: Test hazelcast
-        run : |
+        run: |
           cd hazelcast/hazelcast
           mvn test -P pr-builder,parallelTest -B --no-transfer-progress -Dsurefire.rerunFailingTestsCount=2 -Dsurefire.skipAfterFailureCount=1 -DtestForkCount=1C
 
@@ -197,7 +197,7 @@ jobs:
       # the -T0.5C in .mvn/maven.config). api.version=1.44 is needed for
       # Testcontainers 1.17.6 against current Docker Engine (kafka SQL tests).
       - name: Test hazelcast
-        run : |
+        run: |
           cd hazelcast
           mvn test -pl hazelcast-archunit-rules,hazelcast-build-utils,hazelcast-spring,hazelcast-spring-tests,hazelcast-sql -P pr-builder,parallelTest -B --no-transfer-progress -T1 -DtestForkCount=1C -Dapi.version=1.44 -Dsurefire.rerunFailingTestsCount=2 -Dsurefire.skipAfterFailureCount=1
 
