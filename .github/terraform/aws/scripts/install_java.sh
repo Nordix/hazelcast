@@ -10,7 +10,9 @@ set -e
 
 JAVA_MAJOR=${1:-8}
 
-if java -version 2>&1 | grep -q "version \"${JAVA_MAJOR}\."; then
+# Java 8 prints the legacy version string ("1.8.0_x"), Java 9+ print
+# "<major>.0.x" — accept both forms so the early-exit works for 8.
+if java -version 2>&1 | grep -qE "version \"(1\.)?${JAVA_MAJOR}\."; then
     java -version
     exit 0
 fi
