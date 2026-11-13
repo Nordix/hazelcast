@@ -18,6 +18,9 @@ on:
   push:
     branches:
       - v5.2.5-est
+  pull_request:
+    branches:
+      - v5.2.5-est
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
