@@ -1,0 +1,238 @@
+name: nightly-tests
+# Covers what integration-tests.yml deliberately skips: the extensions/*
+# modules (the "not-quick" reactor modules are active by default — property
+# !quick — they are simply never selected by the -pl lists in that workflow),
+# the failsafe *IT tests (integration-tests.yml only runs `mvn test`),
+# modulepath-tests, hazelcast-it/jdk17-tests, and the SlowTest/NightlyTest
+# categories that the pr-builder surefire config excludes.
+#
+# NOTE: `schedule:` only fires on the repository's default branch. If
+# v5.2.5-est is not the default branch of this fork, either make it the
+# default or rely on workflow_dispatch; the branch filter below then selects
+# the ref the cron runs against.
+on:
+  workflow_dispatch:
+  schedule:
+    # 03:30 UTC daily
+    - cron: '30 3 * * *'
+  push:
+    branches:
+      - v5.2.5-est
+  pull_request:
+    branches:
+      - v5.2.5-est
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-extensions:
+    defaults:
+      run:
+        shell: bash
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        java: [ '8' ]
+        architecture: [ 'x64' ]
+        distribution: [ 'corretto' ]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 #7.0.1
+        with:
+          path: hazelcast
+
+      - name: Setup JDK
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 #6.2.0
+        with:
+          java-version: ${{ matrix.java }}
+          architecture: ${{ matrix.architecture }}
+          distribution: ${{ matrix.distribution }}
+          cache: maven
+
+      # Keep Azure discovery auto-detection from probing IMDS on these
+      # runners (429s abort client creation); same as integration-tests.yml.
+      - name: Neutralize Azure IMDS discovery auto-detection
+        run: sudo sed -i '/internal\.cloudapp\.net/d' /etc/resolv.conf && cat /etc/resolv.conf
+
+      - name: Install core (no tests)
+        run: |
+          cd hazelcast
+          mvn install -pl hazelcast -am -DskipTests -Dcheckstyle.skip -P pr-builder -B --no-transfer-progress
+
+      # hazelcast-3-connector and s3 are intentionally left out for now:
+      #  - hazelcast-3-connector: BaseHz3Test.findConnectorImplJar() matches
+      #    only *-SNAPSHOT.jar and this branch versions as 5.2.5.
+      #  - s3: AWS SDK 2.20.x defaults to virtual-host addressing which
+      #    adobe/s3mock 2.1.15 cannot serve (pathStyleAccessEnabled fix
+      #    needed in the tests).
+      # api.version=1.44: Testcontainers 1.17.6 vs the runner's Docker Engine.
+      - name: Test extensions
+        run: |
+          cd hazelcast
+          mvn verify -P pr-builder,parallelTest -B --no-transfer-progress \
+            -pl extensions/avro,extensions/cdc-debezium,extensions/cdc-mysql,extensions/cdc-postgres,extensions/csv,extensions/elasticsearch/elasticsearch-6,extensions/elasticsearch/elasticsearch-7,extensions/hadoop,extensions/grpc,extensions/kafka,extensions/kinesis,extensions/mapstore,extensions/protobuf,extensions/python \
+            -DtestForkCount=1C -Dapi.version=1.44 \
+            -Dsurefire.rerunFailingTestsCount=2 -Dsurefire.skipAfterFailureCount=1
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 #7.0.2
+        if: always()
+        with:
+          name: surefire-reports-extensions
+          path: hazelcast/extensions/**/target/surefire-reports/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  test-failsafe-it:
+    # Runs the failsafe *IT classes (7 total) that `mvn test` never touches.
+    defaults:
+      run:
+        shell: bash
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        java: [ '8' ]
+        architecture: [ 'x64' ]
+        distribution: [ 'corretto' ]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 #7.0.1
+        with:
+          path: hazelcast
+
+      - name: Setup JDK
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 #6.2.0
+        with:
+          java-version: ${{ matrix.java }}
+          architecture: ${{ matrix.architecture }}
+          distribution: ${{ matrix.distribution }}
+          cache: maven
+
+      # package (not install) so NOTICE/OSGi artifacts the ITs inspect exist;
+      # -DskipTests skips surefire but still compiles test classes.
+      - name: Build with tests compiled
+        run: |
+          cd hazelcast
+          mvn package -pl hazelcast,hazelcast-sql -am -DskipTests -Dcheckstyle.skip -P pr-builder -B --no-transfer-progress
+
+      # Direct failsafe goal invocation: skipTests skips surefire AND failsafe
+      # when bound to the lifecycle, so invoke the goals explicitly.
+      - name: Run failsafe ITs
+        run: |
+          cd hazelcast
+          mvn failsafe:integration-test failsafe:verify -pl hazelcast,hazelcast-sql -P pr-builder -B --no-transfer-progress \
+            -Dapi.version=1.44 -Dsurefire.skipAfterFailureCount=1
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 #7.0.2
+        if: always()
+        with:
+          name: failsafe-reports-it
+          path: |
+            hazelcast/hazelcast/target/failsafe-reports/
+            hazelcast/hazelcast-sql/target/failsafe-reports/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  test-jdk17-modules:
+    # modulepath-tests and hazelcast-it/jdk17-tests are only in the reactor
+    # on JDK 9+/17+ respectively.
+    defaults:
+      run:
+        shell: bash
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        java: [ '17' ]
+        architecture: [ 'x64' ]
+        distribution: [ 'corretto' ]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 #7.0.1
+        with:
+          path: hazelcast
+
+      - name: Setup JDK
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 #6.2.0
+        with:
+          java-version: ${{ matrix.java }}
+          architecture: ${{ matrix.architecture }}
+          distribution: ${{ matrix.distribution }}
+          cache: maven
+
+      - name: Neutralize Azure IMDS discovery auto-detection
+        run: sudo sed -i '/internal\.cloudapp\.net/d' /etc/resolv.conf && cat /etc/resolv.conf
+
+      - name: Install core (no tests)
+        run: |
+          cd hazelcast
+          mvn install -pl hazelcast -am -DskipTests -Dcheckstyle.skip -P pr-builder -B --no-transfer-progress
+
+      - name: Test modulepath and jdk17 modules
+        run: |
+          cd hazelcast
+          mvn test -pl modulepath-tests,hazelcast-it/jdk17-tests -P pr-builder,parallelTest -B --no-transfer-progress \
+            -DtestForkCount=1C -Dsurefire.rerunFailingTestsCount=2 -Dsurefire.skipAfterFailureCount=1
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 #7.0.2
+        if: always()
+        with:
+          name: surefire-reports-jdk17-modules
+          path: |
+            hazelcast/modulepath-tests/target/surefire-reports/
+            hazelcast/hazelcast-it/jdk17-tests/target/surefire-reports/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  test-slow-nightly-core:
+    # The pr-builder surefire config excludes SlowTest/NightlyTest (~240 core
+    # classes / ~1,400 methods); the nightly-build profile runs exactly those.
+    # Its surefire config forces parallel:none and leaves forkCount at the
+    # default of 1 — these classes are not safe to run concurrently.
+    # continue-on-error on purpose for the first while: this category has
+    # never run in this fork's CI, so triage the report before treating the
+    # job as a required check.
+    defaults:
+      run:
+        shell: bash
+    runs-on: ubuntu-latest
+    timeout-minutes: 420
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        java: [ '8' ]
+        architecture: [ 'x64' ]
+        distribution: [ 'corretto' ]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 #7.0.1
+        with:
+          path: hazelcast
+
+      - name: Setup JDK
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 #6.2.0
+        with:
+          java-version: ${{ matrix.java }}
+          architecture: ${{ matrix.architecture }}
+          distribution: ${{ matrix.distribution }}
+          cache: maven
+
+      - name: Neutralize Azure IMDS discovery auto-detection
+        run: sudo sed -i '/internal\.cloudapp\.net/d' /etc/resolv.conf && cat /etc/resolv.conf
+
+      - name: Test slow/nightly core tests
+        run: |
+          cd hazelcast/hazelcast
+          mvn test -P pr-builder,nightly-build -B --no-transfer-progress \
+            -Dsurefire.rerunFailingTestsCount=1 -Dsurefire.skipAfterFailureCount=1
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 #7.0.2
+        if: always()
+        with:
+          name: surefire-reports-slow-nightly
+          path: hazelcast/hazelcast/target/surefire-reports/
+          if-no-files-found: ignore
+          retention-days: 14
