@@ -11,6 +11,11 @@ mkdir -p ${HOME}/man
 LOG_DIR=${HOME}/logs
 MAN_CENTER_HOME=${HOME}/man
 
+# Keep the MC JVM within the 1 GB RAM of the test instance; the default
+# heap sizing on such small instances can prevent the JVM from starting.
+export JAVA_OPTS="-Xmx512m -Xms256m"
+export MANCENTER_JAVA_OPTIONS="-Xmx512m -Xms256m"
+
 MANCENTER_JAR_URL=https://repository.hazelcast.com/download/management-center/hazelcast-management-center-${MANCENTER_VERSION}.zip
 
 pushd ${HOME}/lib

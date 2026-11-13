@@ -1,8 +1,6 @@
 #cloud-config
-# Update apt database on first boot (run 'apt-get update').
-package_update: true
-# Install additional packages on first boot
+# Install additional packages on first boot (java is installed
+# synchronously by scripts/install_java.sh via Terraform provisioners).
 packages:
-  - openjdk-8-jre-headless
   - wget
   - unzip

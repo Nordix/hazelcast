@@ -2,7 +2,7 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = ">= 3.2"
+      version = ">= 3.2, < 5.0"
     }
     tls = {
       source  = "hashicorp/tls"
@@ -25,7 +25,7 @@ data "aws_ami" "image" {
 
   filter {
     name   = "name"
-    values = ["ubuntu/images/hvm-ssd/ubuntu-bionic-18.04-amd64-server-*"]
+    values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
   }
 
   filter {
@@ -149,8 +149,7 @@ resource "aws_security_group" "sg" {
 }
 
 resource "tls_private_key" "ssh" {
-  algorithm = "RSA"
-  rsa_bits  = "4096"
+  algorithm = "ED25519"
 }
 
 resource "local_file" "private_key" {
@@ -180,7 +179,7 @@ resource "aws_instance" "hazelcast_member" {
     type        = "ssh"
     user        = var.username
     host        = self.public_ip
-    timeout     = "180s"
+    timeout     = "420s"
     agent       = false
     private_key = tls_private_key.ssh.private_key_pem
   }
@@ -190,6 +189,19 @@ resource "aws_instance" "hazelcast_member" {
       "mkdir -p /home/${var.username}/jars",
       "mkdir -p /home/${var.username}/logs",
       "while [ ! -f /var/lib/cloud/instance/boot-finished ]; do echo 'Waiting for cloud-init...'; sleep 1; done",
+    ]
+  }
+
+  provisioner "file" {
+    source      = "scripts/install_java.sh"
+    destination = "/home/${var.username}/install_java.sh"
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "cd /home/${var.username}",
+      "chmod 0755 install_java.sh",
+      "./install_java.sh",
     ]
   }
 
@@ -229,7 +241,7 @@ resource "null_resource" "verify_members" {
     type        = "ssh"
     user        = var.username
     host        = aws_instance.hazelcast_member[count.index].public_ip
-    timeout     = "180s"
+    timeout     = "420s"
     agent       = false
     private_key = tls_private_key.ssh.private_key_pem
   }
@@ -262,7 +274,7 @@ resource "aws_instance" "hazelcast_mancenter" {
     type        = "ssh"
     user        = var.username
     host        = self.public_ip
-    timeout     = "180s"
+    timeout     = "420s"
     agent       = false
     private_key = tls_private_key.ssh.private_key_pem
   }
@@ -288,6 +300,19 @@ resource "aws_instance" "hazelcast_mancenter" {
     ]
   }
 
+  provisioner "file" {
+    source      = "scripts/install_java.sh"
+    destination = "/home/${var.username}/install_java.sh"
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "cd /home/${var.username}",
+      "chmod 0755 install_java.sh",
+      "./install_java.sh",
+    ]
+  }
+
   provisioner "remote-exec" {
     inline = [
       "cd /home/${var.username}",
@@ -304,7 +329,7 @@ resource "null_resource" "verify_mancenter" {
     type        = "ssh"
     user        = var.username
     host        = aws_instance.hazelcast_mancenter.public_ip
-    timeout     = "180s"
+    timeout     = "420s"
     agent       = false
     private_key = tls_private_key.ssh.private_key_pem
   }
@@ -313,7 +338,8 @@ resource "null_resource" "verify_mancenter" {
   provisioner "remote-exec" {
     inline = [
       "cd /home/${var.username}",
-      "tail -n 20 ./logs/mancenter.stdout.log",
+      "tail -n 20 ./logs/mancenter.stdout.log || true",
+      "tail -n 20 ./logs/mancenter.stderr.log || true",
       "chmod 0755 verify_mancenter.sh",
       "./verify_mancenter.sh  ${var.member_count}",
     ]
