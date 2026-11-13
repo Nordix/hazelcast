@@ -1,0 +1,211 @@
+name: integration-tests
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - v5.2.5-est
+  pull_request:
+    branches:
+      - v5.2.5-est
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    defaults:
+      run:
+        shell: bash
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        java: [ '8', '11', '17' ]
+        architecture: [ 'x64' ]
+        distribution: [ 'corretto' ]
+    steps:
+      # Clone hazelcast
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 #7.0.1
+        with:
+          path: hazelcast
+
+      # SET UP JDK
+      - name: Setup JDK
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 #6.2.0
+        with:
+          java-version: ${{ matrix.java }}
+          architecture: ${{ matrix.architecture }}
+          distribution: ${{ matrix.distribution }}
+          cache: maven
+
+      - run: java -version
+
+      - name: Build hazelcast jar
+        run: |
+          cd hazelcast
+          mvn clean install -DskipTests -Dcheckstyle.skip
+          find hazelcast/target -maxdepth 1 -name 'hazelcast-*.jar'
+
+      - name: Upload hazelcast jar
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 #7.0.2
+        with:
+          name: jdk${{ matrix.java }}-hazelcast-jar
+          path: hazelcast/hazelcast/target/hazelcast-*.jar
+          if-no-files-found: error
+          retention-days: 14
+
+  validate:
+    defaults:
+      run:
+        shell: bash
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        java: [ '8', '11', '17' ]
+        architecture: [ 'x64' ]
+        distribution: [ 'corretto' ]
+    steps:
+      # Clone hazelcast
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 #7.0.1
+        with:
+          path: hazelcast
+
+      # SET UP JDK
+      - name: Setup JDK
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 #6.2.0
+        with:
+          java-version: ${{ matrix.java }}
+          architecture: ${{ matrix.architecture }}
+          distribution: ${{ matrix.distribution }}
+          cache: maven
+
+      - run: java -version
+
+      - name: Validate hazelcast
+        run: |
+          cd hazelcast
+          mvn clean validate
+
+  test-hazelcast:
+    defaults:
+      run:
+        shell: bash
+    runs-on: ubuntu-latest
+    # The core module is by far the largest suite; give it the bulk of the time
+    timeout-minutes: 420
+    strategy:
+      fail-fast: false
+      matrix:
+        java: [ '8', '11', '17' ]
+        architecture: [ 'x64' ]
+        distribution: [ 'corretto' ]
+    steps:
+      # Clone hazelcast
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 #7.0.1
+        with:
+          path: hazelcast
+
+      # SET UP JDK
+      - name: Setup JDK
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 #6.2.0
+        with:
+          java-version: ${{ matrix.java }}
+          architecture: ${{ matrix.architecture }}
+          distribution: ${{ matrix.distribution }}
+          cache: maven
+
+      - run: java -version
+
+      # GitHub-hosted runners are Azure VMs: /etc/resolv.conf carries the
+      # internal.cloudapp.net search domain and IMDS (169.254.169.254) is
+      # reachable, so Hazelcast's client-side Azure discovery auto-detection
+      # engages and probes IMDS. Under test load IMDS rate-limits (HTTP 429)
+      # and client creation fails with "Failed to configure discovery
+      # strategies". Removing the search domain makes
+      # AzureDiscoveryStrategyFactory.isAutoDetectionApplicable() short-circuit
+      # to false before any probe. Nameservers are left untouched.
+      - name: Neutralize Azure IMDS discovery auto-detection
+        run: sudo sed -i '/internal\.cloudapp\.net/d' /etc/resolv.conf && cat /etc/resolv.conf
+
+      # parallelTest (the pom's own PR-builder profile) runs the @ParallelJVMTest
+      # tagged suite in multiple forks (forkCount 0.5C), then the remaining tests
+      # serially in the singlejvm execution. Without it surefire defaults to a
+      # single fork and the core suite alone exceeds the job timeout.
+      # skipAfterFailureCount=1 aborts the run shortly after the first genuine
+      # failure instead of grinding through the whole suite; flakes rescued by
+      # rerunFailingTestsCount do not count towards it. With forked execution
+      # the exact first-failure point is approximate, but the remaining
+      # test-classes are skipped within seconds.
+      - name: Test hazelcast
+        run: |
+          cd hazelcast/hazelcast
+          mvn test -P pr-builder,parallelTest -B --no-transfer-progress -Dsurefire.rerunFailingTestsCount=2 -Dsurefire.skipAfterFailureCount=1 -DtestForkCount=1C
+
+      - name: Upload surefire reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 #7.0.2
+        with:
+          name: surefire-reports-core-${{ matrix.java }}
+          path: hazelcast/hazelcast/target/surefire-reports/
+          if-no-files-found: ignore
+          retention-days: 5
+
+  test-quick:
+    defaults:
+      run:
+        shell: bash
+    runs-on: ubuntu-latest
+    # Everything except the core module, which test-hazelcast already covers
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        java: [ '8', '11', '17' ]
+        architecture: [ 'x64' ]
+        distribution: [ 'corretto' ]
+    steps:
+      # Clone hazelcast
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 #7.0.1
+        with:
+          path: hazelcast
+
+      # SET UP JDK
+      - name: Setup JDK
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 #6.2.0
+        with:
+          java-version: ${{ matrix.java }}
+          architecture: ${{ matrix.architecture }}
+          distribution: ${{ matrix.distribution }}
+          cache: maven
+
+      - run: java -version
+
+      # See test-hazelcast: keep Azure discovery auto-detection from probing IMDS
+      # (429 rate limits under load fail client creation on these runners).
+      - name: Neutralize Azure IMDS discovery auto-detection
+        run: sudo sed -i '/internal\.cloudapp\.net/d' /etc/resolv.conf && cat /etc/resolv.conf
+
+      # Install the core module (and its dependencies) without tests; its tests
+      # run in test-hazelcast. This is what blew the 6h timeout before.
+      - name: Install hazelcast core without tests
+        run: |
+          cd hazelcast
+          mvn install -pl hazelcast -am -DskipTests -Dcheckstyle.skip -P pr-builder -B --no-transfer-progress
+
+      # hazelcast-sql and hazelcast-spring-tests both bind members on the default
+      # 5701+ ports, so the reactor must run modules sequentially (-T1 overrides
+      # the -T0.5C in .mvn/maven.config). api.version=1.44 is needed for
+      # Testcontainers 1.17.6 against current Docker Engine (kafka SQL tests).
+      - name: Test hazelcast
+        run: |
+          cd hazelcast
+          mvn test -pl hazelcast-archunit-rules,hazelcast-build-utils,hazelcast-spring,hazelcast-spring-tests,hazelcast-sql -P pr-builder,parallelTest -B --no-transfer-progress -T1 -DtestForkCount=1C -Dapi.version=1.44 -Dsurefire.rerunFailingTestsCount=2 -Dsurefire.skipAfterFailureCount=1
+
+      - name: Upload surefire reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 #7.0.2
+        with:
+          name: surefire-reports-modules-${{ matrix.java }}
+          path: hazelcast/*/target/surefire-reports/
+          if-no-files-found: ignore
+          retention-days: 5
