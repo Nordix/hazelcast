@@ -127,9 +127,18 @@ public class TransactionImpl_TwoPhaseIT extends HazelcastTestSupport {
         tx.prepare();
 
         assertPrepared(tx);
-        TxBackupLog log = remoteTxService.txBackupLogs.get(tx.getTxnId());
-        assertNotNull(log);
-        assertEquals(COMMITTING, log.state);
+        // the backup log reaches the remote member asynchronously; the
+        // commit/rollback tests in this class already assert their backup-log
+        // changes with eventually for the same reason (upstream flake
+        // hazelcast/hazelcast#21891 — same assertNotNull/ACTIVE-vs-COMMITTING race).
+        assertTrueEventually(new AssertTask() {
+            @Override
+            public void run() {
+                TxBackupLog log = remoteTxService.txBackupLogs.get(tx.getTxnId());
+                assertNotNull(log);
+                assertEquals(COMMITTING, log.state);
+            }
+        });
         record1.assertPrepareCalled().assertCommitNotCalled().assertRollbackNotCalled();
         record2.assertPrepareCalled().assertCommitNotCalled().assertRollbackNotCalled();
     }
@@ -326,8 +335,15 @@ public class TransactionImpl_TwoPhaseIT extends HazelcastTestSupport {
         tx.prepare();
 
         assertPrepared(tx);
-        TxBackupLog log = remoteTxService.txBackupLogs.get(tx.getTxnId());
-        assertNotNull(log);
+        // same async backup-log replication race as in
+        // prepare_whenMultipleItemsAndDurabilityOne_thenBackupLog — wait for
+        // the log to land before shutting the owner down.
+        assertTrueEventually(new AssertTask() {
+            @Override
+            public void run() {
+                assertNotNull(remoteTxService.txBackupLogs.get(tx.getTxnId()));
+            }
+        });
 
         cluster[0].shutdown();
 
