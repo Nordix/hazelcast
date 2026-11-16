@@ -62,18 +62,23 @@ jobs:
           cd hazelcast
           mvn install -pl hazelcast -am -DskipTests -Dcheckstyle.skip -P pr-builder -B --no-transfer-progress
 
-      # hazelcast-3-connector and s3 are intentionally left out for now:
+      # hazelcast-3-connector, s3, and kinesis are intentionally left out:
       #  - hazelcast-3-connector: BaseHz3Test.findConnectorImplJar() matches
       #    only *-SNAPSHOT.jar and this branch versions as 5.2.5.
       #  - s3: AWS SDK 2.20.x defaults to virtual-host addressing which
       #    adobe/s3mock 2.1.15 cannot serve (pathStyleAccessEnabled fix
       #    needed in the tests).
+      #  - kinesis: the tests pin localstack/localstack:0.12.3, a tag that
+      #    has been removed from Docker Hub (pull 404s regardless of config).
+      # -fae: one module's failure must not hide the results of the rest
+      # (run 43474254199 lost hadoop/cdc-mysql/cdc-postgres/mapstore/grpc/
+      # protobuf/python to fail-fast after kinesis).
       # api.version=1.44: Testcontainers 1.17.6 vs the runner's Docker Engine.
       - name: Test extensions
         run: |
           cd hazelcast
-          mvn verify -P pr-builder,parallelTest -B --no-transfer-progress \
-            -pl extensions/avro,extensions/cdc-debezium,extensions/cdc-mysql,extensions/cdc-postgres,extensions/csv,extensions/elasticsearch/elasticsearch-6,extensions/elasticsearch/elasticsearch-7,extensions/hadoop,extensions/grpc,extensions/kafka,extensions/kinesis,extensions/mapstore,extensions/protobuf,extensions/python \
+          mvn verify -fae -P pr-builder,parallelTest -B --no-transfer-progress \
+            -pl extensions/avro,extensions/cdc-debezium,extensions/cdc-mysql,extensions/cdc-postgres,extensions/csv,extensions/elasticsearch/elasticsearch-6,extensions/elasticsearch/elasticsearch-7,extensions/hadoop,extensions/grpc,extensions/kafka,extensions/mapstore,extensions/protobuf,extensions/python \
             -DtestForkCount=1C -Dapi.version=1.44 \
             -Dsurefire.rerunFailingTestsCount=2 -Dsurefire.skipAfterFailureCount=1
 
@@ -119,12 +124,13 @@ jobs:
           mvn package -pl hazelcast,hazelcast-sql -am -DskipTests -Dcheckstyle.skip -P pr-builder -B --no-transfer-progress
 
       # Direct failsafe goal invocation: skipTests skips surefire AND failsafe
-      # when bound to the lifecycle, so invoke the goals explicitly.
+      # when bound to the lifecycle, so invoke the goals explicitly. Note the
+      # failsafe.* property namespace — surefire.* names do NOT reach failsafe.
       - name: Run failsafe ITs
         run: |
           cd hazelcast
           mvn failsafe:integration-test failsafe:verify -pl hazelcast,hazelcast-sql -P pr-builder -B --no-transfer-progress \
-            -Dapi.version=1.44 -Dsurefire.skipAfterFailureCount=1
+            -Dapi.version=1.44 -Dfailsafe.rerunFailingTestsCount=2 -Dfailsafe.skipAfterFailureCount=1
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 #7.0.2
         if: always()
@@ -227,7 +233,7 @@ jobs:
         run: |
           cd hazelcast/hazelcast
           mvn test -P pr-builder,nightly-build -B --no-transfer-progress \
-            -Dsurefire.rerunFailingTestsCount=1 -Dsurefire.skipAfterFailureCount=1
+            -Dapi.version=1.44 -Dsurefire.rerunFailingTestsCount=1 -Dsurefire.skipAfterFailureCount=1
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 #7.0.2
         if: always()
