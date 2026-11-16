@@ -57,6 +57,14 @@ jobs:
       - name: Neutralize Azure IMDS discovery auto-detection
         run: sudo sed -i '/internal\.cloudapp\.net/d' /etc/resolv.conf && cat /etc/resolv.conf
 
+      # extensions/python needs a working `python3 -m venv`: ubuntu runner
+      # images ship python3 without python3-venv/ensurepip, so Jet's
+      # jet_to_python_init.sh dies at line 5 with "exit code: 1" (run
+      # 43897701521). Verified end-to-end (venv + pinned protobuf/grpcio)
+      # in an ubuntu:24.04 container.
+      - name: Install python3-venv for the python extension
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq python3-venv
+
       - name: Install core (no tests)
         run: |
           cd hazelcast
@@ -126,10 +134,19 @@ jobs:
       # Direct failsafe goal invocation: skipTests skips surefire AND failsafe
       # when bound to the lifecycle, so invoke the goals explicitly. Note the
       # failsafe.* property namespace — surefire.* names do NOT reach failsafe.
+      # HazelcastOSGiIT is excluded: it is a pax-exam test that boots an OSGi
+      # framework, resolves bundles from the long-dead osgi.sonatype.org
+      # (5 s vs 93 s vs never-finish depending on network phase — it hangs
+      # locally), and its bundle uninstall pollutes the shared fork for the
+      # next class — TwoPhaseIT then hung for 4 h in run 43897701521. The
+      # positive '*IT' in it.test is required: an exclusion-only pattern makes
+      # failsafe fall back to default unit-test includes and re-run all 43k
+      # *Test classes.
       - name: Run failsafe ITs
         run: |
           cd hazelcast
           mvn failsafe:integration-test failsafe:verify -pl hazelcast,hazelcast-sql -P pr-builder -B --no-transfer-progress \
+            -Dit.test='*IT,!HazelcastOSGiIT' \
             -Dapi.version=1.44 -Dfailsafe.rerunFailingTestsCount=2 -Dfailsafe.skipAfterFailureCount=1
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 #7.0.2
