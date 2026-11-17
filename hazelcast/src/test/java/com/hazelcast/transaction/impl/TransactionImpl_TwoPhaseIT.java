@@ -106,16 +106,6 @@ public class TransactionImpl_TwoPhaseIT extends HazelcastTestSupport {
         tx.prepare();
 
         assertPrepared(tx);
-        // Two members started from a factory are not guaranteed to form one
-        // cluster (TestHazelcastInstanceFactory javadoc: "It is not guaranteed
-        // that all created members will join to the same cluster!"); if they
-        // didn't, pickBackupLogAddresses is empty by design and no replication
-        // happens — the old immediate assertNull/assertTrueEventually then
-        // assert on a cluster that cannot exhibit the feature. On GH runners
-        // (runs 43897701521/43945979182/44088799014) the 2 factory members
-        // deterministically stayed singleton members.
-        assumeTrue("factory members did not join one cluster",
-                cluster[0].getCluster().getMembers().size() == 2);
         assertNoBackupLogOnRemote(tx);
         record.assertPrepareCalled().assertCommitNotCalled().assertRollbackNotCalled();
     }
@@ -348,6 +338,8 @@ public class TransactionImpl_TwoPhaseIT extends HazelcastTestSupport {
         tx.prepare();
 
         assertPrepared(tx);
+        assumeTrue("factory members did not join one cluster",
+                cluster[0].getCluster().getMembers().size() == 2);
         // same async backup-log replication race as in
         // prepare_whenMultipleItemsAndDurabilityOne_thenBackupLog — wait for
         // the log to land before shutting the owner down.
