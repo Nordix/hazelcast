@@ -228,7 +228,10 @@ jobs:
       run:
         shell: bash
     runs-on: ubuntu-latest
-    timeout-minutes: 420
+    # Full slow/nightly pass measured ~5 h 42 m (run 43474254191); GitHub
+    # caps public-repo jobs at 360 min, so 420 would silently clamp — 350
+    # leaves the margin explicit.
+    timeout-minutes: 350
     continue-on-error: true
     strategy:
       fail-fast: false
