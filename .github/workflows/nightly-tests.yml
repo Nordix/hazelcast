@@ -65,6 +65,21 @@ jobs:
       - name: Install python3-venv for the python extension
         run: sudo apt-get update -qq && sudo apt-get install -y -qq python3-venv
 
+      # TEMPORARY PROBE (remove once python is green): replay exactly what
+      # jet_to_python_init.sh does — its output never reaches the maven
+      # console (PythonServiceContext.logStdOut routes it to the Jet member
+      # logger). Run 43945979182 had python3-venv installed and STILL got
+      # init exit 1 after ~40 s per attempt, while a plain ubuntu:24.04
+      # container passes the same chain; this pinpoints where the runner
+      # differs.
+      - name: Probe the Jet python init chain
+        run: |
+          python3 -V
+          python3 -m venv /tmp/jetdbg --system-site-packages
+          /tmp/jetdbg/bin/python -m pip install --upgrade pip
+          /tmp/jetdbg/bin/python -m pip install protobuf==3.19.6 grpcio==1.60.0
+          /tmp/jetdbg/bin/python -c 'import google.protobuf, grpc; print("JET-PY-CHAIN-OK")'
+
       - name: Install core (no tests)
         run: |
           cd hazelcast
