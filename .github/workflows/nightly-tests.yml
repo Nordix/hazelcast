@@ -134,6 +134,12 @@ jobs:
       # Direct failsafe goal invocation: skipTests skips surefire AND failsafe
       # when bound to the lifecycle, so invoke the goals explicitly. Note the
       # failsafe.* property namespace — surefire.* names do NOT reach failsafe.
+      # rerunFailingTestsCount only: failsafe 2.22.2 DEADLOCKS the fork when
+      # rerunFailingTestsCount and skipAfterFailureCount are both active and a
+      # test fails its first attempt (reproduced locally with a flaky probe;
+      # that hang, not OSGi, is what killed test-failsafe-it in runs
+      # 43897701521/43945979182 at TwoPhaseIT RemoveBackupLog). surefire
+      # 2.22.2 does not share the bug, so the core jobs keep both flags.
       # HazelcastOSGiIT is excluded: it is a pax-exam test that boots an OSGi
       # framework, resolves bundles from the long-dead osgi.sonatype.org
       # (5 s vs 93 s vs never-finish depending on network phase — it hangs
@@ -147,7 +153,7 @@ jobs:
           cd hazelcast
           mvn failsafe:integration-test failsafe:verify -pl hazelcast,hazelcast-sql -P pr-builder -B --no-transfer-progress \
             -Dit.test='*IT,!HazelcastOSGiIT' \
-            -Dapi.version=1.44 -Dfailsafe.rerunFailingTestsCount=2 -Dfailsafe.skipAfterFailureCount=1
+            -Dapi.version=1.44 -Dfailsafe.rerunFailingTestsCount=2
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 #7.0.2
         if: always()
