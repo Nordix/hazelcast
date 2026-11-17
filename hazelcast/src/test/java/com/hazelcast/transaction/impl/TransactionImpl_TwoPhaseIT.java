@@ -47,6 +47,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
+import static org.junit.Assume.assumeTrue;
 
 @RunWith(HazelcastParallelClassRunner.class)
 @Category(QuickTest.class)
@@ -105,6 +106,16 @@ public class TransactionImpl_TwoPhaseIT extends HazelcastTestSupport {
         tx.prepare();
 
         assertPrepared(tx);
+        // Two members started from a factory are not guaranteed to form one
+        // cluster (TestHazelcastInstanceFactory javadoc: "It is not guaranteed
+        // that all created members will join to the same cluster!"); if they
+        // didn't, pickBackupLogAddresses is empty by design and no replication
+        // happens — the old immediate assertNull/assertTrueEventually then
+        // assert on a cluster that cannot exhibit the feature. On GH runners
+        // (runs 43897701521/43945979182/44088799014) the 2 factory members
+        // deterministically stayed singleton members.
+        assumeTrue("factory members did not join one cluster",
+                cluster[0].getCluster().getMembers().size() == 2);
         assertNoBackupLogOnRemote(tx);
         record.assertPrepareCalled().assertCommitNotCalled().assertRollbackNotCalled();
     }
@@ -127,6 +138,8 @@ public class TransactionImpl_TwoPhaseIT extends HazelcastTestSupport {
         tx.prepare();
 
         assertPrepared(tx);
+        assumeTrue("factory members did not join one cluster",
+                cluster[0].getCluster().getMembers().size() == 2);
         // the backup log reaches the remote member asynchronously; the
         // commit/rollback tests in this class already assert their backup-log
         // changes with eventually for the same reason (upstream flake
