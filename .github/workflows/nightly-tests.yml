@@ -72,6 +72,14 @@ jobs:
       # init exit 1 after ~40 s per attempt, while a plain ubuntu:24.04
       # container passes the same chain; this pinpoints where the runner
       # differs.
+      # RESULT (run 44005310169): runner python3 is 3.14.4; grpcio==1.60.0
+      # has no cp313/cp314 wheels, pip falls back to a source build which
+      # dies on missing pkg_resources. Pin 3.12 via setup-python — its shim
+      # takes PATH precedence for everything below, including the `python3`
+      # that Jet's init script spawns; 3.12 has wheels for both pins.
+      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # 5.3.0
+        with:
+          python-version: '3.12'
       - name: Probe the Jet python init chain
         run: |
           python3 -V
