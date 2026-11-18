@@ -57,36 +57,15 @@ jobs:
       - name: Neutralize Azure IMDS discovery auto-detection
         run: sudo sed -i '/internal\.cloudapp\.net/d' /etc/resolv.conf && cat /etc/resolv.conf
 
-      # extensions/python needs a working `python3 -m venv`: ubuntu runner
-      # images ship python3 without python3-venv/ensurepip, so Jet's
-      # jet_to_python_init.sh dies at line 5 with "exit code: 1" (run
-      # 43897701521). Verified end-to-end (venv + pinned protobuf/grpcio)
-      # in an ubuntu:24.04 container.
-      - name: Install python3-venv for the python extension
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq python3-venv
-
-      # TEMPORARY PROBE (remove once python is green): replay exactly what
-      # jet_to_python_init.sh does — its output never reaches the maven
-      # console (PythonServiceContext.logStdOut routes it to the Jet member
-      # logger). Run 43945979182 had python3-venv installed and STILL got
-      # init exit 1 after ~40 s per attempt, while a plain ubuntu:24.04
-      # container passes the same chain; this pinpoints where the runner
-      # differs.
-      # RESULT (run 44005310169): runner python3 is 3.14.4; grpcio==1.60.0
-      # has no cp313/cp314 wheels, pip falls back to a source build which
-      # dies on missing pkg_resources. Pin 3.12 via setup-python — its shim
-      # takes PATH precedence for everything below, including the `python3`
-      # that Jet's init script spawns; 3.12 has wheels for both pins.
+      # extensions/python: Jet's jet_to_python_init.sh builds a venv and pip
+      # installs the pinned protobuf==3.19.6 / grpcio==1.60.0. The runner's
+      # system python3 is 3.14, for which grpcio 1.60.0 has no wheels (pip
+      # falls back to a source build that dies on missing pkg_resources, run
+      # 44005310169), so pin 3.12. setup-python's shim takes PATH precedence
+      # for the `python3` Jet spawns, and its builds ship venv/ensurepip.
       - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # 5.3.0
         with:
           python-version: '3.12'
-      - name: Probe the Jet python init chain
-        run: |
-          python3 -V
-          python3 -m venv /tmp/jetdbg --system-site-packages
-          /tmp/jetdbg/bin/python -m pip install --upgrade pip
-          /tmp/jetdbg/bin/python -m pip install protobuf==3.19.6 grpcio==1.60.0
-          /tmp/jetdbg/bin/python -c 'import google.protobuf, grpc; print("JET-PY-CHAIN-OK")'
 
       - name: Install core (no tests)
         run: |
