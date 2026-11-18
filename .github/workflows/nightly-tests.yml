@@ -147,16 +147,16 @@ jobs:
           distribution: ${{ matrix.distribution }}
           cache: maven
 
-      # package (not install) so NOTICE/OSGi artifacts the ITs inspect exist;
-      # -DskipTests skips surefire but still compiles test classes.
-      - name: Build with tests compiled
-        run: |
-          cd hazelcast
-          mvn package -pl hazelcast,hazelcast-sql -am -DskipTests -Dcheckstyle.skip -P pr-builder -B --no-transfer-progress
-
-      # Direct failsafe goal invocation: skipTests skips surefire AND failsafe
-      # when bound to the lifecycle, so invoke the goals explicitly. Note the
-      # failsafe.* property namespace — surefire.* names do NOT reach failsafe.
+      # One lifecycle `verify`, not `package` + direct failsafe goals: the
+      # NOTICE ITs (CheckSqlNoticeFileIT, run 44188926867) look for
+      # META-INF/NOTICE on a URL under target/, which only exists in the
+      # packaged jar — a direct failsafe:integration-test call runs against
+      # target/classes, which has none for hazelcast-sql. -skipTests would
+      # skip failsafe too, so surefire is neutralised with a non-matching
+      # -Dtest instead. -T1 because .mvn/maven.config sets -T0.5C and the
+      # modules' tests share default ports.
+      # Note the failsafe.* property namespace — surefire.* names do NOT reach
+      # failsafe.
       # rerunFailingTestsCount only: failsafe 2.22.2 DEADLOCKS the fork when
       # rerunFailingTestsCount and skipAfterFailureCount are both active and a
       # test fails its first attempt (reproduced locally with a flaky probe;
@@ -174,8 +174,9 @@ jobs:
       - name: Run failsafe ITs
         run: |
           cd hazelcast
-          mvn failsafe:integration-test failsafe:verify -pl hazelcast,hazelcast-sql -P pr-builder -B --no-transfer-progress \
-            -Dit.test='*IT,!HazelcastOSGiIT' \
+          mvn verify -pl hazelcast,hazelcast-sql -am -T1 -P pr-builder -Dcheckstyle.skip -B --no-transfer-progress \
+            -Dtest=NoSuchTest -Dsurefire.failIfNoSpecifiedTests=false \
+            -Dit.test='*IT,!HazelcastOSGiIT' -Dit.failIfNoSpecifiedTests=false -DfailIfNoTests=false \
             -Dapi.version=1.44 -Dfailsafe.rerunFailingTestsCount=2
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 #7.0.2
