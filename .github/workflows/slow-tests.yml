@@ -5,11 +5,6 @@ name: slow-tests
 # the failsafe *IT tests (integration-tests.yml only runs `mvn test`),
 # modulepath-tests, hazelcast-it/jdk17-tests, and the SlowTest/NightlyTest
 # categories that the pr-builder surefire config excludes.
-#
-# NOTE: `schedule:` only fires on the repository's default branch. If
-# v5.2.5-est is not the default branch of this fork, either make it the
-# default or rely on workflow_dispatch; the branch filter below then selects
-# the ref the cron runs against.
 on:
   workflow_dispatch:
   push:
