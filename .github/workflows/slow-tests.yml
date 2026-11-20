@@ -118,6 +118,14 @@ jobs:
           distribution: ${{ matrix.distribution }}
           cache: maven
 
+      # Without this the two members started by TestHazelcastInstanceFactory
+      # never merge on GH runners: they are Azure VMs, so Azure discovery
+      # auto-detection engages, Node picks the Azure DiscoveryJoiner instead
+      # of multicast and each member forms its own cluster (TwoPhaseIT saw
+      # localClusterSize=1, no backup addresses). Same step as the other jobs.
+      - name: Neutralize Azure IMDS discovery auto-detection
+        run: sudo sed -i '/internal\.cloudapp\.net/d' /etc/resolv.conf && cat /etc/resolv.conf
+
       # One lifecycle `verify`, not `package` + direct failsafe goals: the
       # NOTICE ITs (CheckSqlNoticeFileIT, run 44188926867) look for
       # META-INF/NOTICE on a URL under target/, which only exists in the
