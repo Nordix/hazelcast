@@ -47,7 +47,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
-import static org.junit.Assume.assumeTrue;
 
 @RunWith(HazelcastParallelClassRunner.class)
 @Category(QuickTest.class)
@@ -128,8 +127,7 @@ public class TransactionImpl_TwoPhaseIT extends HazelcastTestSupport {
         tx.prepare();
 
         assertPrepared(tx);
-        assumeTrue("factory members did not join one cluster",
-                cluster[0].getCluster().getMembers().size() == 2);
+        assertClusterSizeEventually(2, cluster);
         // the backup log reaches the remote member asynchronously; the
         // commit/rollback tests in this class already assert their backup-log
         // changes with eventually for the same reason (upstream flake
@@ -338,8 +336,7 @@ public class TransactionImpl_TwoPhaseIT extends HazelcastTestSupport {
         tx.prepare();
 
         assertPrepared(tx);
-        assumeTrue("factory members did not join one cluster",
-                cluster[0].getCluster().getMembers().size() == 2);
+        assertClusterSizeEventually(2, cluster);
         // same async backup-log replication race as in
         // prepare_whenMultipleItemsAndDurabilityOne_thenBackupLog — wait for
         // the log to land before shutting the owner down.
