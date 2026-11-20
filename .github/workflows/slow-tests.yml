@@ -1,4 +1,4 @@
-name: nightly-tests
+name: slow-tests
 # Covers what integration-tests.yml deliberately skips: the extensions/*
 # modules (the "not-quick" reactor modules are active by default — property
 # !quick — they are simply never selected by the -pl lists in that workflow),
@@ -12,9 +12,6 @@ name: nightly-tests
 # the ref the cron runs against.
 on:
   workflow_dispatch:
-  schedule:
-    # 03:30 UTC daily
-    - cron: '30 3 * * *'
   push:
     branches:
       - v5.2.5-est
