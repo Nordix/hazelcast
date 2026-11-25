@@ -48,11 +48,13 @@ import com.hazelcast.nio.serialization.Portable;
 import com.hazelcast.nio.serialization.Serializer;
 import com.hazelcast.partition.PartitioningStrategy;
 
+import javax.annotation.Nonnull;
 import java.io.Externalizable;
 import java.io.Serializable;
 import java.nio.ByteOrder;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashSet;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -125,8 +127,11 @@ public abstract class AbstractSerializationService implements InternalSerializat
         this.allowOverrideDefaultSerializers = builder.allowOverrideDefaultSerializers;
         CompactSerializationConfig compactSerializationCfg = builder.compactSerializationConfig == null
                 ? new CompactSerializationConfig() : builder.compactSerializationConfig;
+        // CVE-2026-107726 backport [adapted from upstream 361979da: upstream also replaces the first argument with
+        // a class-lookup function; 5.2.5 keeps passing the serialization service]
         compactStreamSerializer = new CompactStreamSerializer(this, compactSerializationCfg,
-                managedContext, builder.schemaService, classLoader);
+                managedContext, builder.schemaService, classLoader,
+                builder.reflectiveCompactSerializationRestrictions);
         this.compactWithSchemaSerializerAdapter = new CompactWithSchemaStreamSerializerAdapter(compactStreamSerializer);
         this.compactSerializerAdapter = new CompactStreamSerializerAdapter(compactStreamSerializer);
     }
@@ -732,6 +737,10 @@ public abstract class AbstractSerializationService implements InternalSerializat
         private boolean allowOverrideDefaultSerializers;
         private CompactSerializationConfig compactSerializationConfig;
         private SchemaService schemaService;
+        // CVE-2026-107726 backport [adapted from upstream 361979da: upstream replaces its older block/allow-list
+        // builder fields with this one; 5.2.5 has no such fields, so this only adds the new field]
+        private ExtraReflectiveCompactSerializationRestrictions reflectiveCompactSerializationRestrictions
+                = ExtraReflectiveCompactSerializationRestrictions.NO_RESTRICTIONS;
 
         protected Builder() {
         }
@@ -817,6 +826,13 @@ public abstract class AbstractSerializationService implements InternalSerializat
 
         public final T withSchemaService(SchemaService schemaService) {
             this.schemaService = schemaService;
+            return self();
+        }
+
+        // CVE-2026-107726 backport [upstream 361979da]
+        public final T withReflectiveCompactSerializationRestrictions(
+                @Nonnull ExtraReflectiveCompactSerializationRestrictions restrictions) {
+            this.reflectiveCompactSerializationRestrictions = Objects.requireNonNull(restrictions);
             return self();
         }
     }

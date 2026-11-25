@@ -266,7 +266,9 @@ public class CompactSerializationTest {
             service.toData(OptionalDouble.of(1));
         }).isInstanceOf(HazelcastSerializationException.class)
                 .hasStackTraceContaining("cannot be serialized with zero configuration Compact serialization")
-                .hasStackTraceContaining("If you want to serialize this class");
+                // CVE-2026-107726 backport [same change as upstream 361979da]: java.* classes are now blocked by the reflective
+                // compact serialization filter, which produces the "restricted" message.
+                .hasStackTraceContaining("To override an existing serialization mechanism you can add");
     }
 
     @Test

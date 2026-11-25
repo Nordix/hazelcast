@@ -22,6 +22,7 @@ import com.hazelcast.nio.serialization.HazelcastSerializationException;
 import com.hazelcast.nio.serialization.compact.CompactReader;
 import com.hazelcast.nio.serialization.compact.CompactSerializer;
 import com.hazelcast.nio.serialization.compact.CompactWriter;
+import com.hazelcast.nio.serialization.genericrecord.GenericRecord;
 
 import javax.annotation.Nonnull;
 import java.lang.reflect.Field;
@@ -120,6 +121,10 @@ public class ReflectiveCompactSerializer<T> implements CompactSerializer<T> {
         for (ReaderWriter readerWriter : readerWriters) {
             try {
                 readerWriter.read(compactReader, schema, object);
+            } catch (ReflectiveCompactSerializationUnsupportedException e) {
+                // CVE-2026-107726 backport [upstream 361979da]: propagate so the caller can rewind and
+                // fall back to GenericRecord.
+                throw e;
             } catch (Exception e) {
                 throw new HazelcastSerializationException(e);
             }
@@ -321,7 +326,27 @@ public class ReflectiveCompactSerializer<T> implements CompactSerializer<T> {
 
         @Override
         public void read(CompactReader reader, Schema schema, Object o) throws Exception {
-            field.set(o, readerWriter.read(reader, schema));
+            Object fieldValue = readerWriter.read(reader, schema);
+            try {
+                field.set(o, fieldValue);
+            } catch (IllegalArgumentException e) {
+                // CVE-2026-107726 backport [adapted from upstream 361979da: upstream reads the field value a second
+                // time inside this try block; here it is read once and reused, with a null guard]: a nested class
+                // was restricted and therefore read as a
+                // GenericRecord, but the field expects a concrete (non-GenericRecord) type.
+                // Signal this so the top-level read falls back to GenericRecord deserialization.
+                Class<?> fieldValueClass = fieldValue == null ? null : fieldValue.getClass();
+                Class<?> fieldType = field.getType();
+                if (fieldValueClass != null
+                        && GenericRecord.class.isAssignableFrom(fieldValueClass)
+                        && !GenericRecord.class.isAssignableFrom(fieldType)) {
+                    throw new ReflectiveCompactSerializationUnsupportedException(String.format(
+                            "Field '%s' on type '%s' is assigned a value of type '%s' but the field has type '%s'",
+                            field.getName(), o.getClass().getName(), fieldValueClass.getName(), fieldType.getName()));
+                } else {
+                    throw e;
+                }
+            }
         }
 
         @Override

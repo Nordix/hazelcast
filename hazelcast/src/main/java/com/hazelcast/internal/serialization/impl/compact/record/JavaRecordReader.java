@@ -16,9 +16,11 @@
 
 package com.hazelcast.internal.serialization.impl.compact.record;
 
+import com.hazelcast.internal.serialization.impl.compact.ReflectiveCompactSerializationUnsupportedException;
 import com.hazelcast.internal.serialization.impl.compact.Schema;
 import com.hazelcast.nio.serialization.HazelcastSerializationException;
 import com.hazelcast.nio.serialization.compact.CompactReader;
+import com.hazelcast.nio.serialization.genericrecord.GenericRecord;
 
 import java.lang.reflect.Constructor;
 
@@ -45,7 +47,29 @@ public final class JavaRecordReader {
             }
             return recordConstructor.newInstance(components);
         } catch (Exception e) {
+            // CVE-2026-107726 backport [upstream 361979da]: a restricted nested type is read as a GenericRecord, which
+            // the record constructor rejects with an IllegalArgumentException. Report that as an unsupported
+            // reflective serialization so the caller can rewind and read the whole value as a GenericRecord.
+            if (e instanceof IllegalArgumentException) {
+                verifyReflectiveSerializationSupported(components);
+            }
             throw new HazelcastSerializationException("Failed to read the Java record", e);
+        }
+    }
+
+    // CVE-2026-107726 backport [upstream 361979da]
+    private void verifyReflectiveSerializationSupported(Object[] components) {
+        for (int i = 0; i < componentReaderWriters.length; i++) {
+            if (components[i] == null) {
+                break;
+            }
+            Class<?> componentClass = components[i].getClass();
+            Class<?> expectedType = recordConstructor.getParameterTypes()[i];
+            if (GenericRecord.class.isAssignableFrom(componentClass) && !GenericRecord.class.isAssignableFrom(expectedType)) {
+                throw new ReflectiveCompactSerializationUnsupportedException(String.format(
+                        "Component index '%s' for type '%s' is assigned a value of type '%s' but the expected type is '%s'",
+                        i, recordConstructor.getDeclaringClass().getName(), componentClass.getName(), expectedType.getName()));
+            }
         }
     }
 }

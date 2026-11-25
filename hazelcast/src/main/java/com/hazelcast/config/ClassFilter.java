@@ -125,6 +125,25 @@ public class ClassFilter {
         return this;
     }
 
+    /**
+     * Add the classes, packages and prefixes defined in the other filter
+     * to this filter.
+     * <p>
+     * CVE-2026-107726 backport [upstream 361979da]: ported unchanged, apart from the
+     * {@code @since} tag (5.7 upstream).
+     *
+     * @param other The filter containing classes, packages, prefixes to add to this filter.
+     * @return This filter
+     * @since 5.2.5
+     */
+    public ClassFilter add(ClassFilter other) {
+        checkNotNull(other);
+        classes.addAll(other.classes);
+        packages.addAll(other.packages);
+        prefixes.addAll(other.prefixes);
+        return this;
+    }
+
     public boolean isEmpty() {
         return classes.isEmpty() && packages.isEmpty() && prefixes.isEmpty();
     }
