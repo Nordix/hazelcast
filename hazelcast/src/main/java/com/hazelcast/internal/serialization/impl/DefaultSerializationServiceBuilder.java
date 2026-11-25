@@ -17,6 +17,7 @@
 package com.hazelcast.internal.serialization.impl;
 
 import com.hazelcast.config.CompactSerializationConfig;
+import com.hazelcast.config.ClassFilter;
 import com.hazelcast.config.GlobalSerializerConfig;
 import com.hazelcast.config.JavaSerializationFilterConfig;
 import com.hazelcast.config.SerializationConfig;
@@ -26,6 +27,7 @@ import com.hazelcast.core.ManagedContext;
 import com.hazelcast.instance.BuildInfoProvider;
 import com.hazelcast.internal.memory.GlobalMemoryAccessorRegistry;
 import com.hazelcast.internal.nio.ClassLoaderUtil;
+import com.hazelcast.internal.nio.Packet;
 import com.hazelcast.internal.serialization.InputOutputFactory;
 import com.hazelcast.internal.serialization.InternalSerializationService;
 import com.hazelcast.internal.serialization.SerializationClassNameFilter;
@@ -54,6 +56,9 @@ import static java.nio.ByteOrder.BIG_ENDIAN;
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
 import static java.nio.ByteOrder.nativeOrder;
 
+// CVE-2026-107726 backport [not in upstream]: the added blocklist method takes this class over the project's
+// 30-method Checkstyle limit.
+@SuppressWarnings("checkstyle:methodcount")
 public class DefaultSerializationServiceBuilder implements SerializationServiceBuilder {
 
     static final ByteOrder DEFAULT_BYTE_ORDER = BIG_ENDIAN;
@@ -306,6 +311,10 @@ public class DefaultSerializationServiceBuilder implements SerializationServiceB
                     .withCompactSerializationConfig(compactSerializationConfig)
                     .withSchemaService(schemaService)
                     .withCompatibility(isCompatibility)
+                    // CVE-2026-107726 backport [upstream 361979da]
+                    .withReflectiveCompactSerializationRestrictions(
+                            new ExtraReflectiveCompactSerializationRestrictions(
+                                    null, null, createReflectiveCompactSerializerDefaultBlockList()))
                     .build();
                 serializationServiceV1.registerClassDefinitions(classDefinitions);
                 return serializationServiceV1;
@@ -314,6 +323,26 @@ public class DefaultSerializationServiceBuilder implements SerializationServiceB
             default:
                 throw new IllegalArgumentException("Serialization version is not supported!");
         }
+    }
+
+    /**
+     * Builds the always-on default blocklist for reflective (zero-config) Compact serialization.
+     * <p>
+     * CVE-2026-107726 backport [upstream 361979da, same entries]: blocking these internal/unsafe
+     * types prevents a low-privileged client from using reflective Compact serialization to read
+     * arbitrary member memory (Java heap, off-heap, JVM address space).
+     */
+    protected ClassFilter createReflectiveCompactSerializerDefaultBlockList() {
+        ClassFilter blockList = new ClassFilter();
+        blockList.addPrefixes("com.hazelcast.shaded");
+        blockList.addPackages("org.jctools.queues");
+        blockList.addClasses(
+                HeapData.class.getName(),
+                Packet.class.getName(),
+                UnsafeObjectDataInput.class.getName(),
+                "org.agrona.concurrent.status.AtomicCounter"
+        );
+        return blockList;
     }
 
     private void registerSerializerHooks(InternalSerializationService ss) {

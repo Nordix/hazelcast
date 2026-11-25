@@ -24,9 +24,12 @@ import com.hazelcast.internal.nio.BufferObjectDataInput;
 import com.hazelcast.internal.nio.BufferObjectDataOutput;
 import com.hazelcast.internal.nio.ClassLoaderUtil;
 import com.hazelcast.internal.serialization.impl.AbstractSerializationService;
+import com.hazelcast.internal.serialization.impl.ExtraReflectiveCompactSerializationRestrictions;
 import com.hazelcast.internal.serialization.impl.InternalGenericRecord;
 import com.hazelcast.internal.serialization.impl.compact.record.JavaRecordSerializer;
 import com.hazelcast.internal.util.TriTuple;
+import com.hazelcast.logging.ILogger;
+import com.hazelcast.logging.Logger;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.nio.serialization.FieldKind;
@@ -65,15 +68,22 @@ public class CompactStreamSerializer implements StreamSerializer<Object> {
     private final ManagedContext managedContext;
     private final ClassLoader classLoader;
     private final AbstractSerializationService serializationService;
+    // CVE-2026-107726 backport [adapted from upstream 361979da]: the filter, logger and extra constructor parameter
+    // are upstream's, but the constructor keeps its 5.2.5 shape (it still takes the serialization service)
+    // instead of upstream's class-lookup function.
+    private final ReflectiveClassFilter classFilter;
+    private final ILogger logger = Logger.getLogger(CompactStreamSerializer.class);
 
     public CompactStreamSerializer(AbstractSerializationService serializationService,
                                    CompactSerializationConfig compactSerializationConfig,
                                    ManagedContext managedContext, SchemaService schemaService,
-                                   ClassLoader classLoader) {
+                                   ClassLoader classLoader,
+                                   @Nonnull ExtraReflectiveCompactSerializationRestrictions reflectiveRestrictions) {
         this.serializationService = serializationService;
         this.managedContext = managedContext;
         this.schemaService = schemaService;
         this.classLoader = classLoader;
+        this.classFilter = new ReflectiveClassFilter(reflectiveRestrictions);
         registerSerializers(compactSerializationConfig);
         registerDeclarativeConfigSerializers(compactSerializationConfig);
         registerDeclarativeConfigClasses(compactSerializationConfig);
@@ -176,6 +186,7 @@ public class CompactStreamSerializer implements StreamSerializer<Object> {
 
     Object read(BufferObjectDataInput input, boolean schemaIncludedInBinary) throws IOException {
         Schema schema = getOrReadSchema(input, schemaIncludedInBinary);
+        int initialReadPosition = input.position();
         CompactSerializableRegistration registration = getOrCreateRegistration(schema.getTypeName());
 
         if (registration == null) {
@@ -185,9 +196,15 @@ public class CompactStreamSerializer implements StreamSerializer<Object> {
 
         DefaultCompactReader reader = new DefaultCompactReader(this, input, schema,
                 registration.getClazz(), schemaIncludedInBinary);
-        Object object = registration.getSerializer().read(reader);
-        return managedContext != null ? managedContext.initialize(object) : object;
-
+        try {
+            Object object = registration.getSerializer().read(reader);
+            return managedContext != null ? managedContext.initialize(object) : object;
+        } catch (ReflectiveCompactSerializationUnsupportedException e) {
+            // CVE-2026-107726 backport [upstream 361979da]: while reading we encountered a nested restricted class. Instead of
+            // failing the read we rewind the buffer and deserialize to a GenericRecord.
+            input.position(initialReadPosition);
+            return readGenericRecord(input, schema, schemaIncludedInBinary);
+        }
     }
 
     private Schema getOrReadSchema(ObjectDataInput input, boolean schemaIncludedInBinary) throws IOException {
@@ -217,6 +234,13 @@ public class CompactStreamSerializer implements StreamSerializer<Object> {
     private CompactSerializableRegistration getOrCreateRegistration(Class clazz) {
         return classToRegistrationMap.computeIfAbsent(clazz, aClass -> {
             CompactSerializer serializer = javaRecordSerializer.isRecord(aClass) ? javaRecordSerializer : reflectiveSerializer;
+            // CVE-2026-107726 backport [adapted from upstream 361979da: upstream also checks restrictions in
+            // canBeSerializedAsCompact and saveRegistration]: block reflective (zero-config) compact serialization
+            // of restricted classes (internal/JDK/unsafe types) to prevent arbitrary member memory access.
+            if ((serializer == reflectiveSerializer || serializer == javaRecordSerializer)
+                    && classFilter.isRestricted(aClass)) {
+                throw new ReflectiveCompactSerializationUnsupportedException(aClass);
+            }
             return new CompactSerializableRegistration(aClass, aClass.getName(), serializer);
         });
     }
@@ -233,6 +257,22 @@ public class CompactStreamSerializer implements StreamSerializer<Object> {
             }
             try {
                 return getOrCreateRegistration(clazz);
+            } catch (ReflectiveCompactSerializationUnsupportedException e) {
+                // CVE-2026-107726 backport [adapted from upstream 361979da: returns this release's null sentinel, not
+                // upstream's GENERIC_RECORD_REGISTRATION, and logs at FINE, not WARNING]: a class for typeName exists
+                // but is restricted for use with
+                // reflective compact serialization. Instead of failing, deserialize to a
+                // GenericRecord (null sentinel in this release). This prevents a malicious client
+                // from forcing reflective deserialization of restricted internal classes.
+                // Logged at FINE only: the null result is not cached by computeIfAbsent, so this
+                // runs on every read of such a record. This mirrors the silent null returned above
+                // when no class can be loaded for the type name.
+                if (logger.isFineEnabled()) {
+                    logger.fine("Class for typeName=" + typeName + " was found but is ineligible for reflective "
+                            + "compact serialization. Data associated to schemas with this typeName will be "
+                            + "deserialized to GenericRecord instead.");
+                }
+                return null;
             } catch (Exception e) {
                 throw new HazelcastSerializationException("Class " + clazz + " must have an empty constructor", e);
             }
